@@ -1,193 +1,256 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  Keyboard,
-  Alert,
-} from 'react-native';
-import MapView, { Marker, Region } from 'react-native-maps';
-import * as Location from 'expo-location';
+import { View, TextInput, FlatList, TouchableOpacity, Text, StyleSheet, Dimensions, Button } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import MapView, { Marker } from 'react-native-maps';
+import * as Location from 'expo-location';
 
-type LocationCoords = {
-  latitude: number;
-  longitude: number;
-  altitude?: number | null;
-  accuracy?: number | null;
-  altitudeAccuracy?: number | null;
-  heading?: number | null;
-  speed?: number | null;
-};
+const CHAVE_API = "pk.5a5c1619abd2908dcdf0dbff0d13c267";
 
-export default function Index() {
-  const [enderecoOrigem, setEnderecoOrigem] = useState<string>('');
-  const [userLocation, setUserLocation] = useState<LocationCoords | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [mapRegion, setMapRegion] = useState<Region | null>(null);
-  const [markerCoords, setMarkerCoords] = useState<LocationCoords | null>(null);
-  const [loading, setLoading] = useState(false);
+export default function TelaInicial() {
+  const [consulta, setConsulta] = useState('');
+  const [sugestoes, setSugestoes] = useState([]);
+  const [regiao, setRegiao] = useState(null);
+  const [localPesquisa, setLocalPesquisa] = useState(null);
+  const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [enderecoDestino, setEnderecoDestino] = useState(null);
 
   useEffect(() => {
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        setErrorMsg('Permissão para acessar localização negada!');
+        console.log('Permissão para localização negada');
         return;
       }
-
-      const loc = await Location.getCurrentPositionAsync({});
-      setUserLocation(loc.coords);
-
-      // Inicialmente o mapa centraliza na localização do usuário
-      setMapRegion({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
+      let location = await Location.getCurrentPositionAsync({});
+      setRegiao({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       });
     })();
   }, []);
 
-  const buscarEndereco = async () => {
-    if (!enderecoOrigem.trim()) return;
-
-    setLoading(true);
-    try {
-      const resultados = await Location.geocodeAsync(enderecoOrigem);
-      if (resultados.length > 0) {
-        const { latitude, longitude } = resultados[0];
-
-        // Atualiza a região do mapa para o endereço buscado
-        setMapRegion({
-          latitude,
-          longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        });
-
-        // Atualiza as coordenadas do marcador para o endereço buscado
-        setMarkerCoords({ latitude, longitude });
-
-        Keyboard.dismiss();
-      } else {
-        Alert.alert('Endereço não encontrado.');
-      }
-    } catch (error) {
-      Alert.alert('Erro ao buscar endereço.');
+  const buscarSugestoes = async (texto) => {
+    setConsulta(texto);
+    if (texto.length < 3) {
+      setSugestoes([]);
+      return;
     }
-    setLoading(false);
+
+    try {
+      const resposta = await fetch(
+        `https://api.locationiq.com/v1/autocomplete?key=${CHAVE_API}&q=${encodeURIComponent(texto)}&limit=5&format=json`
+      );
+      const dados = await resposta.json();
+      setSugestoes(dados);
+    } catch (erro) {
+      console.log("Erro ao buscar endereço:", erro);
+    }
+  };
+
+  const selecionarSugestao = (item) => {
+    setConsulta(item.display_name);
+    setSugestoes([]);
+    setEnderecoDestino(item);
+    setMostrarFormulario(true);
+
+    if (item.lat && item.lon) {
+      const novaRegiao = {
+        latitude: parseFloat(item.lat),
+        longitude: parseFloat(item.lon),
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+      setRegiao(novaRegiao);
+      setLocalPesquisa({ latitude: parseFloat(item.lat), longitude: parseFloat(item.lon) });
+    }
+  };
+
+  const Formulario = () => {
+    const [enderecoOrigem, setEnderecoOrigem] = useState("Sua localização atual");
+    const [pesoCarga, setPesoCarga] = useState('');
+    const [dimensoesCarga, setDimensoesCarga] = useState('');
+
+    return (
+      <View style={estilos.formulario}>
+        <Text style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 10 }}>Formulário de Envio</Text>
+
+        <Text>Endereço de Partida:</Text>
+        <TextInput style={estilos.inputFormulario} value={enderecoOrigem} onChangeText={setEnderecoOrigem} />
+
+        <Text>Endereço de Destino:</Text>
+        <TextInput
+          style={estilos.inputFormulario}
+          value={enderecoDestino?.display_name || ''}
+          editable={false}
+        />
+
+        <Text>Peso da carga:</Text>
+        <TextInput
+          style={estilos.inputFormulario}
+          value={pesoCarga}
+          onChangeText={setPesoCarga}
+          keyboardType="numeric"
+        />
+
+        <Text>Dimensões da carga:</Text>
+        <TextInput
+          style={estilos.inputFormulario}
+          value={dimensoesCarga}
+          onChangeText={setDimensoesCarga}
+        />
+
+        <View style={{ height: 100, backgroundColor: '#ddd', marginVertical: 10, justifyContent: 'center', alignItems: 'center' }}>
+          <Text>Aqui poderá ser a área para foto</Text>
+        </View>
+
+        <Button title="Fechar Formulário" onPress={() => setMostrarFormulario(false)} />
+      </View>
+    );
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <View style={styles.header}>
+    <SafeAreaView style={estilos.container} edges={['top', 'left', 'right', 'bottom']}>
+  {!mostrarFormulario && (
+    <View style={{ flex: 1 }}>
+      {/* Área do input */}
+      <View style={{ paddingHorizontal: 16, marginTop: 16 }}>
         <TextInput
-          placeholder="Digite o endereço de origem"
-          style={styles.headerInput}
-          value={enderecoOrigem}
-          onChangeText={setEnderecoOrigem}
-          onSubmitEditing={buscarEndereco}
-          returnKeyType="search"
-          editable={!loading}
+          placeholder="Digite o endereço"
+          value={consulta}
+          onChangeText={buscarSugestoes}
+          placeholderTextColor="#6B7280"
+          style={estilos.input}
+          autoCorrect={false}
+          autoCapitalize="none"
         />
-        <TouchableOpacity style={styles.buttonBuscar} onPress={buscarEndereco} disabled={loading}>
-          <Text style={styles.buttonText}>{loading ? 'Buscando...' : 'Buscar'}</Text>
-        </TouchableOpacity>
       </View>
 
-      <View style={styles.content}>
-        {errorMsg ? (
-          <Text>{errorMsg}</Text>
-        ) : mapRegion && userLocation ? (
+      {/* FlatList só aparece se tiver sugestões */}
+      {sugestoes.length > 0 && (
+        <FlatList
+          data={sugestoes}
+          keyExtractor={(item) => item.place_id.toString()}
+          renderItem={({ item }) => (
+            <TouchableOpacity style={estilos.itemSugestao} onPress={() => selecionarSugestao(item)}>
+              <Text>{item.display_name}</Text>
+            </TouchableOpacity>
+          )}
+          keyboardShouldPersistTaps="handled"
+          style={{ maxHeight: 150, marginHorizontal: 16 }}
+        />
+      )}
+
+      {/* Mapa ocupando o resto */}
+      <View style={{ flex: 1 }}>
+        {regiao && (
           <MapView
-            style={styles.map}
-            region={mapRegion}
+            style={{ flex: 1 }}
+            region={regiao}
             showsUserLocation={true}
-            followsUserLocation={false} // para não seguir usuário automaticamente
+            showsMyLocationButton={true}
+            loadingEnabled={true}
           >
-            {markerCoords && <Marker coordinate={markerCoords} />}
+            {localPesquisa && (
+              <Marker
+                coordinate={localPesquisa}
+                title="Destino selecionado"
+                pinColor="red"
+              />
+            )}
           </MapView>
-        ) : (
-          <ActivityIndicator size="large" color="#0000ff" />
         )}
       </View>
+    </View>
+  )}
 
-      <View style={styles.footer}>
-        <TouchableOpacity style={styles.button} onPress={() => {}}>
-          <Text style={styles.buttonText}>Botão 1</Text>
-        </TouchableOpacity>
+  {mostrarFormulario && <Formulario />}
 
-        <TouchableOpacity style={[styles.button, { backgroundColor: '#4CAF50' }]} onPress={() => {}}>
-          <Text style={styles.buttonText}>Botão 2</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={[styles.button, { backgroundColor: '#FF5722' }]} onPress={() => {}}>
-          <Text style={styles.buttonText}>Botão 3</Text>
-        </TouchableOpacity>
-      </View>
+  {!mostrarFormulario && (
+    <SafeAreaView edges={['bottom']} style={estilos.containerbotao}>
+      <TouchableOpacity style={estilos.botao}>
+        <Text style={estilos.textoBotao}>Teste</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={estilos.botao}>
+        <Text style={estilos.textoBotao}>Teste</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={estilos.botao}>
+        <Text style={estilos.textoBotao}>Teste</Text>
+      </TouchableOpacity>
     </SafeAreaView>
+  )}
+</SafeAreaView>
+
+
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 20,
-  },
-
-  headerInput: {
+const estilos = StyleSheet.create({
+  container: {
     flex: 1,
-    height: 50,
-    backgroundColor: '#f0f0f0',
-    paddingHorizontal: 14,
+    backgroundColor: '#F3F4F6',
+  },
+  areaInput: {
+    paddingHorizontal: 16,
+    marginTop: 16,
+  },
+  input: {
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    borderRadius: 8,
     fontSize: 16,
-    borderRadius: 20,
+    color: '#1F2937',
+    elevation: 2,
   },
-
-  buttonBuscar: {
-    marginLeft: 10,
-    backgroundColor: '#2196F3',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 20,
+  itemSugestao: {
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    borderRadius: 8,
+    marginVertical: 4,
+    marginHorizontal: 16,
+    elevation: 1,
   },
-
-  content: { flex: 1 },
-
-  map: { flex: 1 },
-
-  footer: {
+  mapa: {
+    flex: 1,
+    width: Dimensions.get('window').width,
+  },
+  containerbotao: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingVertical: 15,
-    paddingHorizontal: 10,
-    borderTopWidth: 1,
-    borderColor: '#ccc',
-    backgroundColor: '#f9f9f9',
+    backgroundColor: '#FDBA74',
+    paddingVertical: 12,
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
-
-  button: {
-    flex: 0.9,
-    marginHorizontal: 5,
-    backgroundColor: '#2196F3',
-    paddingVertical: 10,
-    borderRadius: 25,
-    alignItems: 'center',
+  botao: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#FE923C',
   },
-
-  buttonText: {
-    color: '#fff',
+  textoBotao: {
+    color: 'white',
     fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: 16,
+  },
+  formulario: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: '#fff',
+  },
+  inputFormulario: {
+    backgroundColor: '#eee',
+    marginVertical: 8,
+    padding: 10,
+    borderRadius: 6,
   },
 });
