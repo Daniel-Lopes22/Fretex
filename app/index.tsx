@@ -3,6 +3,7 @@ import { View, TextInput, FlatList, TouchableOpacity, Text, StyleSheet, Dimensio
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
+import { useRouter } from 'expo-router';
 
 const CHAVE_API = "pk.5a5c1619abd2908dcdf0dbff0d13c267";
 
@@ -13,6 +14,7 @@ export default function TelaInicial() {
   const [localPesquisa, setLocalPesquisa] = useState(null);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [enderecoDestino, setEnderecoDestino] = useState(null);
+  const rotas = useRouter();
 
   useEffect(() => {
     (async () => {
@@ -169,8 +171,8 @@ export default function TelaInicial() {
 
   {!mostrarFormulario && (
     <SafeAreaView edges={['bottom']} style={estilos.containerbotao}>
-      <TouchableOpacity style={estilos.botao}>
-        <Text style={estilos.textoBotao}>Teste</Text>
+      <TouchableOpacity style={estilos.botao} onPress={() => rotas.push('screens/login')}>
+        <Text style={estilos.textoBotao}>Login</Text>
       </TouchableOpacity>
       <TouchableOpacity style={estilos.botao}>
         <Text style={estilos.textoBotao}>Teste</Text>
